@@ -48,6 +48,7 @@
   {"id":47,"name":"ProCycler Gloves","price":22.00,"category":"Cycling","description":"Grip and comfort for long rides","rating":4.5},
   {"id":48,"name":"SmartHydro Water Bottle","price":50.00,"category":"Accessories","description":"Reminds you to stay hydrated","rating":4.6},
   {"id":49,"name":"ActiveWear Compression Socks","price":18.00,"category":"Running","description":"Improves circulation","rating":4.4},
-  {"id":50,"name":"UrbanComfort Hoodie","price":40.00,"category":"Casual","description":"Soft fabric, great for layering","rating":4.3}
+  {"id":50,"name":"UrbanComfort Hoodie","price":40.00,"category":"Casual","description":"Soft fabric, great for layering","rating":4.3},
+  {"id":51,"name":"BudgetRun Shoe","price":49.99,"category":"Running","description":"Affordable breathable running shoe","rating":4.0},
+  {"id":52,"name":"CasualLeather Sneakers 2","price":70.00,"category":"Casual","description":"Comfortable everyday wear","rating":3.3}
 ]
-

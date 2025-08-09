@@ -1,102 +1,86 @@
 package com.ecommerce.ai_catalog.service;
 
 import com.ecommerce.ai_catalog.dto.AIParsedQuery;
-import com.ecommerce.ai_catalog.service.OpenAIConfig;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
-import java.util.Map;
+import java.util.*;
 
 @Component
 public class OpenAIClient {
-
-    private final OpenAIConfig openAIConfig;
-    private final RestTemplate restTemplate = new RestTemplate();
-
+    private final OpenAIConfig cfg;
+    private final RestTemplate rest = new RestTemplate();
+    private final ObjectMapper mapper = new ObjectMapper();
     private static final String OPENAI_URL = "https://api.openai.com/v1/chat/completions";
-    public AIParsedQuery String;
 
     @Autowired
-    public OpenAIClient(OpenAIConfig openAIConfig) {
-        this.openAIConfig = openAIConfig;
+    public OpenAIClient(OpenAIConfig cfg) { this.cfg = cfg; }
+
+    public AIParsedQuery extractSearchParams(String userQuery) {
+        try {
+            String prompt = buildPrompt(userQuery);
+            String raw = callOpenAI(prompt);
+            if (raw == null || raw.isBlank()) return new AIParsedQuery();
+
+            raw = cleanRawJson(raw);
+            AIParsedQuery parsed = mapper.readValue(raw, AIParsedQuery.class);
+            if (parsed.getKeywords() == null) parsed.setKeywords(Collections.emptyList());
+            return parsed;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return new AIParsedQuery();
+        }
     }
 
-    public String ask(String prompt) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.setBearerAuth(openAIConfig.getKey());
-
-        Map<String, Object> body = Map.of(
-                "model", "gpt-3.5-turbo",
-                "messages", new Object[]{
-                        Map.of("role", "system", "content",
-                                "You are a helpful AI that extracts product search parameters in strict JSON format. Respond only with JSON keys: category (string), keywords (array of strings), maxPrice (number). No explanations."),
-                        Map.of("role", "user", "content", prompt)
-                },
-                "temperature", 0.2
+    private String buildPrompt(String q) {
+        return String.format(
+                "You must respond ONLY with a single JSON object (no markdown, no explanation). " +
+                        "Fields: category (Running,Hiking,Casual,Cycling,Apparel,Accessories,Fitness,Swimming or null), " +
+                        "keywords (array), minPrice (number or null), maxPrice (number or null). " +
+                        "If user says 'under $X' set maxPrice = X. If user says 'around $X' set minPrice = X*0.8 and maxPrice = X*1.2. " +
+                        "If price is not present use nulls. " +
+                        "User Query: \"%s\"", q
         );
-
-
-        HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
-
-        try {
-            ResponseEntity<Map> response = restTemplate.exchange(
-                    OPENAI_URL,
-                    HttpMethod.POST,
-                    request,
-                    Map.class
-            );
-
-            var choices = (java.util.List<Map<String, Object>>) response.getBody().get("choices");
-            var message = (Map<String, Object>) choices.get(0).get("message");
-            return message.get("content").toString();
-
-        } catch (Exception e) {
-            e.printStackTrace();
-            return null;
-        }
     }
 
-    public AIParsedQuery extractSearchParams(String query) {
-        String prompt = """
-You are an AI assistant for an e-commerce product catalog.
+    @SuppressWarnings("unchecked")
+    private String callOpenAI(String prompt) throws Exception {
+        HttpHeaders hd = new HttpHeaders();
+        hd.setContentType(MediaType.APPLICATION_JSON);
+        hd.setBearerAuth(cfg.getKey());
 
-The catalog contains products in these categories: 
-Running, Hiking, Casual, Cycling, Apparel, Accessories, Fitness, Swimming
+        Map<String,Object> system = Map.of("role","system","content","You are a JSON-only response assistant.");
+        Map<String,Object> user = Map.of("role","user","content", prompt);
 
-Your job is to extract the user's **intent** into:
-- category
-- keywords (as list)
-- maxPrice (if specified)
+        Map<String,Object> body = new HashMap<>();
+        body.put("model", "gpt-4o-mini");
+        body.put("messages", new Object[]{system, user});
+        body.put("temperature", 0.0);
 
-Respond only in this JSON format:
+        HttpEntity<Map<String,Object>> req = new HttpEntity<>(body, hd);
+        ResponseEntity<Map> resp = rest.exchange(OPENAI_URL, HttpMethod.POST, req, Map.class);
 
-{
-  "category": "Cycling",
-  "keywords": ["helmet", "lightweight"],
-  "maxPrice": 100.0
-}
-
-If any field is missing from the query, set it to null or an empty list.
-
-User Query: "%s"
-""".formatted(query);
-
-
-        String response = ask(prompt);
-
-        try {
-            // Parse the JSON response from OpenAI
-            ObjectMapper objectMapper = new ObjectMapper();
-            System.out.println(objectMapper.readValue(response, AIParsedQuery.class));
-            return objectMapper.readValue(response, AIParsedQuery.class);
-        } catch (Exception e) {
-            e.printStackTrace();
-            return new AIParsedQuery(); // empty fallback
-        }
+        if (resp.getStatusCode() != HttpStatus.OK || resp.getBody() == null) return null;
+        var choices = (List<Map<String,Object>>) resp.getBody().get("choices");
+        if (choices == null || choices.isEmpty()) return null;
+        var message = (Map<String,Object>) choices.get(0).get("message");
+        if (message == null) return null;
+        return String.valueOf(message.get("content"));
     }
 
+    private String cleanRawJson(String raw) {
+        raw = raw == null ? "" : raw.strip();
+        if (raw.startsWith("```")) {
+            int firstNewline = raw.indexOf('\n');
+            if (firstNewline > 0 && firstNewline + 1 < raw.length()) raw = raw.substring(firstNewline + 1);
+            if (raw.endsWith("```")) raw = raw.substring(0, raw.length()-3);
+        }
+        int start = raw.indexOf('{');
+        int end = raw.lastIndexOf('}');
+        if (start >= 0 && end > start) raw = raw.substring(start, end+1);
+        return raw.strip();
+    }
 }

@@ -1,11 +1,8 @@
 package com.ecommerce.ai_catalog.controller;
 
-import com.ecommerce.ai_catalog.dto.SearchRequest;
-import com.ecommerce.ai_catalog.dto.SearchResponse;
 import com.ecommerce.ai_catalog.model.Product;
 import com.ecommerce.ai_catalog.service.ProductService;
-
-import org.springframework.http.ResponseEntity;
+import com.ecommerce.ai_catalog.dto.SearchRequest;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -13,7 +10,6 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api")
-@CrossOrigin(origins = "*") // adjust for your dev environment if needed
 public class SearchController {
     private final ProductService productService;
 
@@ -22,17 +18,18 @@ public class SearchController {
     }
 
     @GetMapping("/products")
-    public ResponseEntity<List<Map<String,Object>>> allProducts() {
-        return ResponseEntity.ok(productService.getProducts());
+    public List<Product> allProducts() {
+        return productService.getAllProducts();
     }
 
+    /**
+     * POST /api/search
+     * Body: { "query": "running shoes under $100" }
+     */
     @PostMapping("/search")
-    public ResponseEntity<SearchResponse> search(@RequestBody SearchRequest request) {
-        List<Integer> ids = productService.search(request.getQuery());
-        String explanation = "Local matching used";
-        if (request.getQuery() == null || request.getQuery().isBlank()) {
-            explanation = "Empty query - returning all ids";
-        }
-        return ResponseEntity.ok(new SearchResponse(ids, explanation));
+    public Map<String, List<Integer>> search(@RequestBody SearchRequest request) {
+        List<Product> matched = productService.smartSearch(request.getQuery());
+        List<Integer> ids = matched.stream().map(Product::getId).toList();
+        return Map.of("ids", ids);
     }
 }

@@ -1,18 +1,12 @@
 package com.ecommerce.ai_catalog.service;
 
-import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-@ConfigurationProperties(prefix = "openai.api")
 public class OpenAIConfig {
+    @Value("${openai.api.key:}")
     private String key;
 
-    public String getKey() {
-        return key;
-    }
-
-    public void setKey(String key) {
-        this.key = key;
-    }
+    public String getKey() { return key; }
 }
